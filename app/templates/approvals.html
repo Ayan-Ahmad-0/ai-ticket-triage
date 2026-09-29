@@ -25,6 +25,7 @@
     .pill.low { background:#dcfae6; color:#067647; }
     .pill.neg { background:#fde8f0; color:#c11574; }
     .pill.pii { background:#f4ebff; color:#6941c6; }
+    .pill.cost { background:#e0f2fe; color:#075985; }
     .label { font-size:12px; font-weight:600; text-transform:uppercase;
              letter-spacing:.05em; color:var(--muted); margin:14px 0 4px; }
     .ticket { background:#f9fafb; border-left:3px solid var(--line); padding:8px 12px;
@@ -56,6 +57,7 @@
       <span class="pill {{ d.urgency }}">{{ d.urgency }}</span>
       <span class="pill {% if d.sentiment == 'negative' %}neg{% endif %}">{{ d.sentiment }}</span>
       {% if d.has_pii %}<span class="pill pii">contains PII</span>{% endif %}
+      <span class="pill cost">${{ "%.4f"|format(d.cost_usd) }}</span>
     </div>
 
     <div class="label">Ticket</div>
