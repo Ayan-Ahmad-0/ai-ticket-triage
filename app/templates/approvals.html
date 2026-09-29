@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pending drafts</title>
+  <style>
+    :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --muted:#667085; --line:#e4e7ec; --accent:#2f5bea; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+           font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    main { max-width:820px; margin:0 auto; padding:36px 20px 60px; }
+    h1 { margin:0 0 6px; font-size:26px; }
+    .notice { background:#eef3ff; border:1px solid #d6e0ff; color:#27418f;
+              padding:10px 14px; border-radius:8px; margin:0 0 24px; font-size:14px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+            padding:18px 20px; margin-bottom:16px; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    .head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .id { color:var(--muted); font-size:13px; }
+    .subject { font-weight:600; font-size:16px; margin-right:auto; }
+    .pill { font-size:12px; font-weight:600; padding:2px 10px; border-radius:999px;
+            background:#eef0f4; color:#475467; }
+    .pill.high { background:#fee4e2; color:#b42318; }
+    .pill.medium { background:#fef0c7; color:#b54708; }
+    .pill.low { background:#dcfae6; color:#067647; }
+    .pill.neg { background:#fde8f0; color:#c11574; }
+    .pill.pii { background:#f4ebff; color:#6941c6; }
+    .label { font-size:12px; font-weight:600; text-transform:uppercase;
+             letter-spacing:.05em; color:var(--muted); margin:14px 0 4px; }
+    .ticket { background:#f9fafb; border-left:3px solid var(--line); padding:8px 12px;
+              border-radius:4px; white-space:pre-wrap; }
+    .draft { white-space:pre-wrap; background:#f5f8ff; border:1px solid #dbe5ff;
+             padding:12px 14px; border-radius:8px; }
+    form { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
+    input { padding:8px 10px; border:1px solid #d0d5dd; border-radius:8px; font:inherit; }
+    input:focus { outline:2px solid #c7d7fe; border-color:var(--accent); }
+    input[name=reviewed_by] { width:170px; }
+    input[name=reason] { flex:1; min-width:180px; }
+    button { padding:8px 16px; border:0; border-radius:8px; font:inherit; font-weight:600; cursor:pointer; }
+    .approve { background:#12b76a; color:#fff; }
+    .reject { background:#fff; color:#b42318; border:1px solid #fda29b; }
+    .empty { text-align:center; color:var(--muted); padding:48px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Pending drafts</h1>
+  <p class="notice">Nothing is sent anywhere. Approving only records your decision.</p>
+
+  {% for d in drafts %}
+  <section class="card">
+    <div class="head">
+      <span class="id">#{{ d.id }}</span>
+      <span class="subject">{{ d.payload.subject }}</span>
+      <span class="pill">{{ d.category }}</span>
+      <span class="pill {{ d.urgency }}">{{ d.urgency }}</span>
+      <span class="pill {% if d.sentiment == 'negative' %}neg{% endif %}">{{ d.sentiment }}</span>
+      {% if d.has_pii %}<span class="pill pii">contains PII</span>{% endif %}
+    </div>
+
+    <div class="label">Ticket</div>
+    <div class="ticket">{{ d.payload.body }}</div>
+
+    <div class="label">Draft reply</div>
+    <div class="draft">{{ d.draft_reply }}</div>
+
+    <form method="post">
+      <input name="reviewed_by" placeholder="Your name" required>
+      <input name="reason" placeholder="Reason (needed to reject)">
+      <button class="approve" formaction="/approvals/{{ d.id }}/approve">Approve</button>
+      <button class="reject" formaction="/approvals/{{ d.id }}/reject"
+              onclick="if(!this.form.reason.value.trim()){alert('Add a reason to reject');return false;}">Reject</button>
+    </form>
+  </section>
+  {% else %}
+  <p class="empty">No pending drafts.</p>
+  {% endfor %}
+</main>
+</body>
+</html>
