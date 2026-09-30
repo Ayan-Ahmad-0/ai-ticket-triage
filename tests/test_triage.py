@@ -4,10 +4,12 @@ import json
 
 import pytest
 from fastapi.testclient import TestClient
+from psycopg.types.json import Jsonb
+from unittest.mock import patch
 
 from app.db import get_conn
 from app.llm import FakeProvider
-from app.main import app
+from app.main import app, notify_helpdesk
 from app.worker import process_one
 
 SECRET = "test-secret"
@@ -69,6 +71,17 @@ def test_end_to_end_draft_is_pending_and_redacted(client):
     assert "a@example.com" not in trace and "1234567" not in trace
 
 
+def test_approval_page_shows_helpdesk_ticket_number(client):
+    post_ticket(client, {**TICKET, "source_id": "helpdesk-32"})
+    process_one(FakeProvider())
+
+    response = client.get("/approvals")
+
+    assert response.status_code == 200
+    assert "Ticket no. 32" in response.text
+    assert 'formaction="/approvals/1/approve"' in response.text
+
+
 def test_failed_job_waits_for_retry_backoff(client):
     post_ticket(client, {**TICKET, "source_id": "retry-backoff"})
     with get_conn() as conn:
@@ -84,3 +97,52 @@ def test_failed_job_waits_for_retry_backoff(client):
             ("retry-backoff",),
         )
     assert process_one(FakeProvider()) is True
+
+
+@pytest.mark.parametrize(
+    ("action", "status"), [("approve", "approved"), ("reject", "rejected")]
+)
+def test_approval_sends_signed_helpdesk_status_callback(client, monkeypatch, action, status):
+    monkeypatch.setenv("HELPDESK_URL", "https://helpdesk.example")
+    monkeypatch.setenv("TRIAGE_WEBHOOK_SECRET", "callback-secret")
+    with get_conn() as conn:
+        job = conn.execute(
+            "INSERT INTO triage.jobs (source_id, payload) VALUES (%s, %s) RETURNING id",
+            ("helpdesk-42", Jsonb({"subject": "Test", "body": "Test body"})),
+        ).fetchone()
+        draft = conn.execute(
+            "INSERT INTO triage.drafts (job_id) VALUES (%s) RETURNING id",
+            (job["id"],),
+        ).fetchone()
+
+    form = {"reviewed_by": "Reviewer"}
+    if action == "reject":
+        form["reason"] = "Not applicable"
+    with patch("app.main.httpx.post") as post:
+        response = client.post(
+            f"/approvals/{draft['id']}/{action}", data=form, follow_redirects=False
+        )
+
+    assert response.status_code == 303
+    call = post.call_args
+    assert call.args[0] == f"https://helpdesk.example/tickets/42/status"
+    raw_body = call.kwargs["content"]
+    assert raw_body == json.dumps({"status": status}, separators=(",", ":")).encode()
+    expected = hmac.new(b"callback-secret", raw_body, hashlib.sha256).hexdigest()
+    assert call.kwargs["headers"]["X-Signature"] == expected
+
+
+def test_helpdesk_callback_accepts_local_development_url(monkeypatch):
+    monkeypatch.setenv("HELPDESK_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("TRIAGE_WEBHOOK_SECRET", "callback-secret")
+    with patch("app.main.httpx.post") as post:
+        notify_helpdesk("helpdesk-42", "approved")
+    assert post.call_args.args[0] == "http://127.0.0.1:8000/tickets/42/status"
+
+
+def test_helpdesk_callback_rejects_remote_http_url(monkeypatch):
+    monkeypatch.setenv("HELPDESK_URL", "http://helpdesk.example")
+    monkeypatch.setenv("TRIAGE_WEBHOOK_SECRET", "callback-secret")
+    with patch("app.main.httpx.post") as post:
+        notify_helpdesk("helpdesk-42", "approved")
+    post.assert_not_called()

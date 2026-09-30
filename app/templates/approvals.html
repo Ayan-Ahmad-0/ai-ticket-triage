@@ -45,13 +45,15 @@
 </head>
 <body>
 <main>
-  <h1>Pending drafts</h1>
-  <p class="notice">Nothing is sent anywhere. Approving only records your decision.</p>
-
+  <h1>PENDING DRAFTS</h1>
   {% for d in drafts %}
   <section class="card">
     <div class="head">
-      <span class="id">#{{ d.id }}</span>
+      {% if d.source_id.startswith('helpdesk-') %}
+      <span class="id">Ticket no. {{ d.source_id.split('-', 1)[1] }}</span>
+      {% else %}
+      <span class="id">Draft no. {{ d.id }}</span>
+      {% endif %}
       <span class="subject">{{ d.payload.subject }}</span>
       <span class="pill">{{ d.category }}</span>
       <span class="pill {{ d.urgency }}">{{ d.urgency }}</span>
@@ -60,7 +62,7 @@
       <span class="pill cost">${{ "%.4f"|format(d.cost_usd) }}</span>
     </div>
 
-    <div class="label">Ticket</div>
+    <div class="label">Ticket Subject</div>
     <div class="ticket">{{ d.payload.body }}</div>
 
     <div class="label">Draft reply</div>
